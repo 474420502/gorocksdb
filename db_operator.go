@@ -466,6 +466,11 @@ func (wbcf *WriteBatchColumnFamily) Data() []byte {
 	return wbcf.wb.Data()
 }
 
+// Count returns the number of updates in the batch.
+func (wbcf *WriteBatchColumnFamily) Count() int {
+	return wbcf.wb.Count()
+}
+
 // Clear removes all the enqueued Put and Deletes.
 func (wbcf *WriteBatchColumnFamily) Clear() {
 	wbcf.wb.Clear()
