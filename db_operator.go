@@ -58,6 +58,21 @@ func (op *Operator) GetSelf() (*DB, map[string]*ColumnFamilyHandle) {
 	return op.db, op.cfhs
 }
 
+// GetColumnFamilyHandles get the names of ColumnFamilyHandles
+func (op *Operator) GetColumnFamilyHandles() []string {
+	var result []string
+	for key := range op.cfhs {
+		result = append(result, key)
+	}
+
+	return result
+}
+
+// GetProperty returns the value of a database property.
+func (op *Operator) GetProperty(propName string) string {
+	return op.db.GetProperty(propName)
+}
+
 // SetDefaultWriteOptions set deufalt WriteOptions
 func (op *Operator) SetDefaultWriteOptions(wopt *WriteOptions) {
 	if op.wopt != nil {
@@ -264,4 +279,9 @@ func (op *OperatorColumnFamily) WriteBatch(do func(batch *WriteBatch)) error {
 		return err
 	}
 	return err
+}
+
+// GetProperty returns the value of a database property.
+func (op *OperatorColumnFamily) GetProperty(propName string) string {
+	return op.db.GetPropertyCF(propName, op.cfh)
 }
