@@ -362,6 +362,21 @@ func (opcf *OperatorColumnFamily) MultiGetObjectEx(value interface{}, keys ...in
 	return nil
 }
 
+// Delete
+func (opcf *OperatorColumnFamily) Delete(key []byte) error {
+	return opcf.db.DeleteCF(opcf.wopt, opcf.cfh, key)
+}
+
+// DeleteObject
+func (opcf *OperatorColumnFamily) DeleteObject(key interface{}) error {
+	var buf bytes.Buffer
+	err := gob.NewEncoder(&buf).Encode(key)
+	if err != nil {
+		return err
+	}
+	return opcf.db.DeleteCF(opcf.wopt, opcf.cfh, buf.Bytes())
+}
+
 // Get Slice is need free
 func (opcf *OperatorColumnFamily) KeySize() uint64 {
 	size, err := strconv.ParseUint(opcf.GetProperty("rocksdb.estimate-num-keys"), 10, 64)
@@ -408,11 +423,11 @@ func (opcf *OperatorColumnFamily) MultiGetSafe(do func(i int, value []byte) bool
 }
 
 // WriteBatch  批量Put(安全释放内存)
-func (op *OperatorColumnFamily) WriteBatch(do func(batch *WriteBatch)) error {
-	batch := NewWriteBatch()
+func (op *OperatorColumnFamily) WriteBatch(do func(batch *WriteBatchColumnFamily)) error {
+	batch := newWriteBatchColumnFamily(op)
 	defer batch.Destroy()
 	do(batch)
-	err := op.db.Write(op.wopt, batch)
+	err := op.db.Write(op.wopt, batch.WriteBatch)
 	if err != nil {
 		return err
 	}
@@ -422,4 +437,72 @@ func (op *OperatorColumnFamily) WriteBatch(do func(batch *WriteBatch)) error {
 // GetProperty returns the value of a database property.
 func (op *OperatorColumnFamily) GetProperty(propName string) string {
 	return op.db.GetPropertyCF(propName, op.cfh)
+}
+
+type WriteBatchColumnFamily struct {
+	*WriteBatch
+	op *OperatorColumnFamily
+}
+
+func newWriteBatchColumnFamily(op *OperatorColumnFamily) *WriteBatchColumnFamily {
+	wb := NewWriteBatch()
+	return &WriteBatchColumnFamily{
+		WriteBatch: wb,
+		op:         op,
+	}
+}
+
+// PutObject
+func (wb *WriteBatchColumnFamily) PutObject(key []byte, value interface{}) error {
+	var buf bytes.Buffer
+	err := gob.NewEncoder(&buf).Encode(value)
+	if err != nil {
+		return err
+	}
+	wb.PutCF(wb.op.cfh, key, buf.Bytes())
+	return nil
+}
+
+// PutObjectEx key and value is gob object
+func (wb *WriteBatchColumnFamily) PutObjectEx(key, value interface{}) error {
+	var kbuf, vbuf bytes.Buffer
+	err := gob.NewEncoder(&kbuf).Encode(key)
+	if err != nil {
+		return err
+	}
+	err = gob.NewEncoder(&vbuf).Encode(value)
+	if err != nil {
+		return err
+	}
+
+	wb.PutCF(wb.op.cfh, kbuf.Bytes(), vbuf.Bytes())
+	return nil
+}
+
+// DeleteObject
+func (wb *WriteBatchColumnFamily) DeleteObject(key interface{}) error {
+	var buf bytes.Buffer
+	err := gob.NewEncoder(&buf).Encode(key)
+	if err != nil {
+		return err
+	}
+	wb.DeleteCF(wb.op.cfh, buf.Bytes())
+	return nil
+}
+
+// DeleteRange
+func (wb *WriteBatchColumnFamily) DeleteObjectRange(start, end interface{}) error {
+	var sbuf bytes.Buffer
+	var err error
+	err = gob.NewEncoder(&sbuf).Encode(start)
+	if err != nil {
+		return err
+	}
+	var ebuf bytes.Buffer
+	err = gob.NewEncoder(&ebuf).Encode(end)
+	if err != nil {
+		return err
+	}
+	wb.DeleteRangeCF(wb.op.cfh, sbuf.Bytes(), ebuf.Bytes())
+	return nil
 }
