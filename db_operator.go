@@ -434,9 +434,17 @@ func (op *OperatorColumnFamily) WriteBatch(do func(batch *WriteBatchColumnFamily
 	return err
 }
 
+// NewIterator returns an Iterator over the the database and column family that uses the ReadOptions.
+// Warning! iterator must be closed.
+func (opcf *OperatorColumnFamily) NewIterator() *OperatorIterator {
+	return &OperatorIterator{iter: opcf.db.NewIteratorCF(opcf.ropt, opcf.cfh)}
+}
+
 // NewIterator returns an Iterator over the the database and column family that uses the ReadOptions
-func (opcf *OperatorColumnFamily) NewIterator() *Iterator {
-	return opcf.db.NewIteratorCF(opcf.ropt, opcf.cfh)
+func (opcf *OperatorColumnFamily) IteratorSafe(do func(*OperatorIteratorSafe)) {
+	opiter := &OperatorIteratorSafe{iter: opcf.db.NewIteratorCF(opcf.ropt, opcf.cfh)}
+	defer opiter.close()
+	do(opiter)
 }
 
 // GetProperty returns the value of a database property.
