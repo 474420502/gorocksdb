@@ -22,6 +22,8 @@ type Operator struct {
 	isDestory bool
 }
 
+// OpenDbColumnFamiliesEx Auto destory with call runtime.SetFinalizer.
+// Operator must be Referenced before OperatorColumnFamily finish all the operate
 func OpenDbColumnFamiliesEx(opts *Options, name string) (*Operator, error) {
 
 	cfnames, err := ListColumnFamilies(opts, name)
@@ -184,7 +186,7 @@ func (opcf *OperatorColumnFamily) Put(key, value []byte) error {
 	return opcf.db.PutCF(opcf.wopt, opcf.cfh, key, value)
 }
 
-// Put
+// PutObject
 func (opcf *OperatorColumnFamily) PutObject(key []byte, value interface{}) error {
 	var buf bytes.Buffer
 	err := gob.NewEncoder(&buf).Encode(value)
@@ -194,9 +196,41 @@ func (opcf *OperatorColumnFamily) PutObject(key []byte, value interface{}) error
 	return opcf.db.PutCF(opcf.wopt, opcf.cfh, key, buf.Bytes())
 }
 
+// PutObjectEx key and value is gob object
+func (opcf *OperatorColumnFamily) PutObjectEx(key, value interface{}) error {
+	var kbuf, vbuf bytes.Buffer
+	err := gob.NewEncoder(&kbuf).Encode(key)
+	if err != nil {
+		return err
+	}
+	err = gob.NewEncoder(&vbuf).Encode(value)
+	if err != nil {
+		return err
+	}
+	return opcf.db.PutCF(opcf.wopt, opcf.cfh, kbuf.Bytes(), vbuf.Bytes())
+}
+
 // GetObject is safe
 func (opcf *OperatorColumnFamily) GetObject(key []byte, value interface{}) error {
 	s, err := opcf.db.GetCF(opcf.ropt, opcf.cfh, key)
+	if err != nil {
+		return err
+	}
+	defer s.Free()
+	if s.Exists() {
+		return gob.NewDecoder(bytes.NewReader(s.Data())).Decode(value)
+	}
+	return nil
+}
+
+// GetObject is safe
+func (opcf *OperatorColumnFamily) GetObjectEx(key, value interface{}) error {
+	var kbuf bytes.Buffer
+	err := gob.NewEncoder(&kbuf).Encode(key)
+	if err != nil {
+		return err
+	}
+	s, err := opcf.db.GetCF(opcf.ropt, opcf.cfh, kbuf.Bytes())
 	if err != nil {
 		return err
 	}
@@ -242,6 +276,72 @@ func (opcf *OperatorColumnFamily) MultiGetObject(value interface{}, key ...[]byt
 		zero := reflect.Zero(rtype)
 
 		ss, err := opcf.db.MultiGetCF(opcf.ropt, opcf.cfh, key...)
+		if err != nil {
+			return nil
+		}
+		defer ss.Destroy()
+		for _, s := range ss {
+			if s.Exists() {
+				item := reflect.New(rtype)
+				err = gob.NewDecoder(bytes.NewReader(s.Data())).DecodeValue(item)
+				if err != nil {
+					return err
+				}
+				rvalue = reflect.Append(rvalue, item)
+			} else {
+				rvalue = reflect.Append(rvalue, zero)
+			}
+		}
+	}
+	return nil
+}
+
+// MultiGetObject is safe
+func (opcf *OperatorColumnFamily) MultiGetObjectEx(value interface{}, keys ...interface{}) error {
+	rtype := reflect.TypeOf(value)
+	if rtype.Kind() != reflect.Slice {
+		return fmt.Errorf("value must be the type of slice")
+	}
+	rtype = rtype.Elem()
+
+	var keysbuf [][]byte
+	for _, key := range keys {
+		var kbuf bytes.Buffer
+		err := gob.NewEncoder(&kbuf).Encode(key)
+		if err != nil {
+			return err
+		}
+		keysbuf = append(keysbuf, kbuf.Bytes())
+	}
+
+	if rtype.Kind() == reflect.Ptr {
+		rtype = rtype.Elem()
+
+		rvalue := reflect.ValueOf(value)
+		zero := reflect.Zero(rtype)
+
+		ss, err := opcf.db.MultiGetCF(opcf.ropt, opcf.cfh, keysbuf...)
+		if err != nil {
+			return nil
+		}
+		defer ss.Destroy()
+		for _, s := range ss {
+			if s.Exists() {
+				item := reflect.New(rtype)
+				err = gob.NewDecoder(bytes.NewReader(s.Data())).DecodeValue(item)
+				if err != nil {
+					return err
+				}
+				rvalue = reflect.Append(rvalue, item.Addr())
+			} else {
+				rvalue = reflect.Append(rvalue, zero)
+			}
+		}
+	} else {
+		rvalue := reflect.ValueOf(value)
+		zero := reflect.Zero(rtype)
+
+		ss, err := opcf.db.MultiGetCF(opcf.ropt, opcf.cfh, keysbuf...)
 		if err != nil {
 			return nil
 		}
