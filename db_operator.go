@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 	"fmt"
 	"reflect"
+	"runtime"
 )
 
 // Operator easy to operate rocksdb
@@ -46,6 +47,9 @@ func OpenDbColumnFamiliesEx(opts *Options, name string) (*Operator, error) {
 		op.cfhs[name] = cfs[i]
 	}
 
+	runtime.SetFinalizer(op, func(op *Operator) {
+		op.Destory()
+	})
 	return op, nil
 }
 
@@ -99,6 +103,29 @@ func (op *Operator) CreateColumnFamily(name string) error {
 	}
 	op.cfhs[name] = cf
 	return nil
+}
+
+// GetSelf get object  *DB *ColumnFamilyHandle
+func (op *Operator) Destory() {
+	if !op.isDestory {
+		if op.cfhs != nil {
+			for _, cfh := range op.cfhs {
+				cfh.Destroy()
+			}
+		}
+
+		if op.ropt != nil {
+			op.ropt.Destroy()
+		}
+		if op.wopt != nil {
+			op.wopt.Destroy()
+		}
+		if op.db != nil {
+			op.db.Close()
+		}
+
+		op.isDestory = true
+	}
 }
 
 // Operator easy to operate rocksdb
@@ -225,4 +252,16 @@ func (opcf *OperatorColumnFamily) MultiGetSafe(do func(i int, value []byte) bool
 		}
 	}
 	return nil
+}
+
+// WriteBatch  批量Put(安全释放内存)
+func (op *OperatorColumnFamily) WriteBatch(do func(batch *WriteBatch)) error {
+	batch := NewWriteBatch()
+	defer batch.Destroy()
+	do(batch)
+	err := op.db.Write(op.wopt, batch)
+	if err != nil {
+		return err
+	}
+	return err
 }
