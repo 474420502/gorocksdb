@@ -110,6 +110,33 @@ func (op *Operator) ColumnFamily(name string) *OperatorColumnFamily {
 	return nil
 }
 
+// ColumnFamilyMissCreate return a OperatorColumnFamily, if miss ColumnFamily, will create ColumnFamily
+func (op *Operator) ColumnFamilyMissCreate(name string) *OperatorColumnFamily {
+	var cfh *ColumnFamilyHandle
+	var ok bool
+	if cfh, ok = op.cfhs[name]; !ok {
+		err := op.CreateColumnFamily(name)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	if op.wopt == nil {
+		op.wopt = NewDefaultWriteOptions()
+	}
+
+	if op.ropt == nil {
+		op.ropt = NewDefaultReadOptions()
+	}
+
+	return &OperatorColumnFamily{
+		db:   op.db,
+		wopt: op.wopt,
+		ropt: op.ropt,
+		cfh:  cfh,
+	}
+}
+
 // CreateColumnFamily create a ColumnFamily
 func (op *Operator) CreateColumnFamily(name string) error {
 	cf, err := op.db.CreateColumnFamily(op.opts, name)
@@ -120,7 +147,7 @@ func (op *Operator) CreateColumnFamily(name string) error {
 	return nil
 }
 
-// GetSelf get object  *DB *ColumnFamilyHandle
+// Destory  destory  the objects in operator
 func (op *Operator) Destory() {
 	if !op.isDestory {
 		if op.cfhs != nil {
@@ -143,7 +170,7 @@ func (op *Operator) Destory() {
 	}
 }
 
-// Operator easy to operate rocksdb
+// OperatorColumnFamily easy to operate the ColumnFamily of  rocksdb
 type OperatorColumnFamily struct {
 	db   *DB
 	ropt *ReadOptions
@@ -239,11 +266,12 @@ func (opcf *OperatorColumnFamily) Get(key []byte) (*Slice, error) {
 	return opcf.db.GetCF(opcf.ropt, opcf.cfh, key)
 }
 
-// Get Slices is need Destory
+// MultiGet Slices is need Destory
 func (opcf *OperatorColumnFamily) MultiGet(key ...[]byte) (Slices, error) {
 	return opcf.db.MultiGetCF(opcf.ropt, opcf.cfh, key...)
 }
 
+// GetSafe not need to free object
 func (opcf *OperatorColumnFamily) GetSafe(key []byte, do func(value []byte)) error {
 	s, err := opcf.db.GetCF(opcf.ropt, opcf.cfh, key)
 	if err != nil {
@@ -254,7 +282,7 @@ func (opcf *OperatorColumnFamily) GetSafe(key []byte, do func(value []byte)) err
 	return nil
 }
 
-// Get Slices is need Destory
+// Get Slices is not needed to free object
 func (opcf *OperatorColumnFamily) MultiGetSafe(do func(i int, value []byte) bool, key ...[]byte) error {
 	ss, err := opcf.db.MultiGetCF(opcf.ropt, opcf.cfh, key...)
 	if err != nil {
