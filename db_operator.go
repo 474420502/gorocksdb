@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"runtime"
+	"strconv"
 )
 
 // Operator easy to operate rocksdb
@@ -259,6 +260,15 @@ func (opcf *OperatorColumnFamily) MultiGetObject(value interface{}, key ...[]byt
 		}
 	}
 	return nil
+}
+
+// Get Slice is need free
+func (opcf *OperatorColumnFamily) KeySize() uint64 {
+	size, err := strconv.ParseUint(opcf.GetProperty("rocksdb.estimate-num-keys"), 10, 64)
+	if err != nil {
+		panic(err)
+	}
+	return size
 }
 
 // Get Slice is need free
