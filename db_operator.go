@@ -425,9 +425,9 @@ func (opcf *OperatorColumnFamily) MultiGetSafe(do func(i int, value []byte) bool
 // WriteBatch  批量Put(安全释放内存)
 func (op *OperatorColumnFamily) WriteBatch(do func(batch *WriteBatchColumnFamily)) error {
 	batch := newWriteBatchColumnFamily(op)
-	defer batch.Destroy()
+	defer batch.wb.Destroy()
 	do(batch)
-	err := op.db.Write(op.wopt, batch.WriteBatch)
+	err := op.db.Write(op.wopt, batch.wb)
 	if err != nil {
 		return err
 	}
@@ -440,31 +440,55 @@ func (op *OperatorColumnFamily) GetProperty(propName string) string {
 }
 
 type WriteBatchColumnFamily struct {
-	*WriteBatch
+	wb *WriteBatch
 	op *OperatorColumnFamily
 }
 
 func newWriteBatchColumnFamily(op *OperatorColumnFamily) *WriteBatchColumnFamily {
-	wb := NewWriteBatch()
 	return &WriteBatchColumnFamily{
-		WriteBatch: wb,
-		op:         op,
+		wb: NewWriteBatch(),
+		op: op,
 	}
 }
 
+// Put
+func (wbcf *WriteBatchColumnFamily) Put(key, value []byte) {
+	wbcf.wb.PutCF(wbcf.op.cfh, key, value)
+}
+
+// Merge   queues a merge of "value" with the existing value of "key" in a column family.
+func (wbcf *WriteBatchColumnFamily) Merge(key, value []byte) {
+	wbcf.wb.MergeCF(wbcf.op.cfh, key, value)
+}
+
+// Data  returns the serialized version of this batch
+func (wbcf *WriteBatchColumnFamily) Data() []byte {
+	return wbcf.wb.Data()
+}
+
+// Clear removes all the enqueued Put and Deletes.
+func (wbcf *WriteBatchColumnFamily) Clear() {
+	wbcf.wb.Clear()
+}
+
+// NewIterator returns a iterator to iterate over the records in the batch.
+func (wbcf *WriteBatchColumnFamily) NewIterator() *WriteBatchIterator {
+	return wbcf.wb.NewIterator()
+}
+
 // PutObject
-func (wb *WriteBatchColumnFamily) PutObject(key []byte, value interface{}) error {
+func (wbcf *WriteBatchColumnFamily) PutObject(key []byte, value interface{}) error {
 	var buf bytes.Buffer
 	err := gob.NewEncoder(&buf).Encode(value)
 	if err != nil {
 		return err
 	}
-	wb.PutCF(wb.op.cfh, key, buf.Bytes())
+	wbcf.wb.PutCF(wbcf.op.cfh, key, buf.Bytes())
 	return nil
 }
 
 // PutObjectEx key and value is gob object
-func (wb *WriteBatchColumnFamily) PutObjectEx(key, value interface{}) error {
+func (wbcf *WriteBatchColumnFamily) PutObjectEx(key, value interface{}) error {
 	var kbuf, vbuf bytes.Buffer
 	err := gob.NewEncoder(&kbuf).Encode(key)
 	if err != nil {
@@ -475,23 +499,23 @@ func (wb *WriteBatchColumnFamily) PutObjectEx(key, value interface{}) error {
 		return err
 	}
 
-	wb.PutCF(wb.op.cfh, kbuf.Bytes(), vbuf.Bytes())
+	wbcf.wb.PutCF(wbcf.op.cfh, kbuf.Bytes(), vbuf.Bytes())
 	return nil
 }
 
 // DeleteObject
-func (wb *WriteBatchColumnFamily) DeleteObject(key interface{}) error {
+func (wbcf *WriteBatchColumnFamily) DeleteObject(key interface{}) error {
 	var buf bytes.Buffer
 	err := gob.NewEncoder(&buf).Encode(key)
 	if err != nil {
 		return err
 	}
-	wb.DeleteCF(wb.op.cfh, buf.Bytes())
+	wbcf.wb.DeleteCF(wbcf.op.cfh, buf.Bytes())
 	return nil
 }
 
 // DeleteRange
-func (wb *WriteBatchColumnFamily) DeleteObjectRange(start, end interface{}) error {
+func (wbcf *WriteBatchColumnFamily) DeleteObjectRange(start, end interface{}) error {
 	var sbuf bytes.Buffer
 	var err error
 	err = gob.NewEncoder(&sbuf).Encode(start)
@@ -503,6 +527,6 @@ func (wb *WriteBatchColumnFamily) DeleteObjectRange(start, end interface{}) erro
 	if err != nil {
 		return err
 	}
-	wb.DeleteRangeCF(wb.op.cfh, sbuf.Bytes(), ebuf.Bytes())
+	wbcf.wb.DeleteRangeCF(wbcf.op.cfh, sbuf.Bytes(), ebuf.Bytes())
 	return nil
 }
