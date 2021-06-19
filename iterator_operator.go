@@ -13,15 +13,6 @@ type OperatorIterator struct {
 var ErrKeyNotExists = fmt.Errorf("key not exists")
 var ErrValueNotExists = fmt.Errorf("key not exists")
 
-func (opiter *OperatorIterator) KeyObject(key interface{}) error {
-	k := opiter.iter.Key()
-	defer k.Free()
-	if k.Exists() {
-		return gob.NewDecoder(bytes.NewReader(k.Data())).Decode(key)
-	}
-	return ErrKeyNotExists
-}
-
 func (opiter *OperatorIterator) ValueObject(value interface{}) error {
 	k := opiter.iter.Value()
 	defer k.Free()
@@ -31,45 +22,32 @@ func (opiter *OperatorIterator) ValueObject(value interface{}) error {
 	return ErrValueNotExists
 }
 
-func (opiter *OperatorIterator) SeekObject(key interface{}) {
-	var buf bytes.Buffer
-	err := gob.NewEncoder(&buf).Encode(key)
-	if err != nil {
-		panic(err)
-	}
-	opiter.iter.Seek(buf.Bytes())
-}
-
-func (opiter *OperatorIterator) SeekObjectForPrev(key interface{}) {
-	var buf bytes.Buffer
-	err := gob.NewEncoder(&buf).Encode(key)
-	if err != nil {
-		panic(err)
-	}
-	opiter.iter.SeekForPrev(buf.Bytes())
-}
-
-func (opiter *OperatorIterator) ValidObjectForPrefix(prefix interface{}) bool {
-	var buf bytes.Buffer
-	err := gob.NewEncoder(&buf).Encode(prefix)
-	if err != nil {
-		panic(err)
-	}
-	return opiter.iter.ValidForPrefix(buf.Bytes())
-}
-
 func (opiter *OperatorIterator) Valid() bool {
 	return opiter.iter.Valid()
 }
+
 func (opiter *OperatorIterator) ValidForPrefix(prefix []byte) bool {
 	return opiter.iter.ValidForPrefix(prefix)
 }
-func (opiter *OperatorIterator) Key() *Slice {
-	return opiter.iter.Key()
+
+func (opiter *OperatorIterator) Key() []byte {
+
+	k := opiter.iter.Key()
+	var buf []byte = make([]byte, k.Size())
+	copy(buf, k.Data())
+	k.Free()
+
+	return buf
 }
-func (opiter *OperatorIterator) Value() *Slice {
-	return opiter.iter.Value()
+
+func (opiter *OperatorIterator) Value() []byte {
+	v := opiter.iter.Value()
+	var buf []byte = make([]byte, v.Size())
+	copy(buf, v.Data())
+	v.Free()
+	return buf
 }
+
 func (opiter *OperatorIterator) Next() {
 	opiter.iter.Next()
 }
@@ -99,15 +77,6 @@ type OperatorIteratorSafe struct {
 	iter *Iterator
 }
 
-func (opiter *OperatorIteratorSafe) KeyObject(key interface{}) error {
-	k := opiter.iter.Key()
-	defer k.Free()
-	if k.Exists() {
-		return gob.NewDecoder(bytes.NewReader(k.Data())).Decode(key)
-	}
-	return ErrKeyNotExists
-}
-
 func (opiter *OperatorIteratorSafe) ValueObject(value interface{}) error {
 	k := opiter.iter.Value()
 	defer k.Free()
@@ -115,33 +84,6 @@ func (opiter *OperatorIteratorSafe) ValueObject(value interface{}) error {
 		return gob.NewDecoder(bytes.NewReader(k.Data())).Decode(value)
 	}
 	return ErrValueNotExists
-}
-
-func (opiter *OperatorIteratorSafe) SeekObject(key interface{}) {
-	var buf bytes.Buffer
-	err := gob.NewEncoder(&buf).Encode(key)
-	if err != nil {
-		panic(err)
-	}
-	opiter.iter.Seek(buf.Bytes())
-}
-
-func (opiter *OperatorIteratorSafe) SeekObjectForPrev(key interface{}) {
-	var buf bytes.Buffer
-	err := gob.NewEncoder(&buf).Encode(key)
-	if err != nil {
-		panic(err)
-	}
-	opiter.iter.SeekForPrev(buf.Bytes())
-}
-
-func (opiter *OperatorIteratorSafe) ValidObjectForPrefix(prefix interface{}) bool {
-	var buf bytes.Buffer
-	err := gob.NewEncoder(&buf).Encode(prefix)
-	if err != nil {
-		panic(err)
-	}
-	return opiter.iter.ValidForPrefix(buf.Bytes())
 }
 
 func (opiter *OperatorIteratorSafe) Valid() bool {
@@ -153,18 +95,20 @@ func (opiter *OperatorIteratorSafe) ValidForPrefix(prefix []byte) bool {
 }
 
 func (opiter *OperatorIteratorSafe) Key() []byte {
-	var buf []byte
+
 	k := opiter.iter.Key()
+	var buf []byte = make([]byte, k.Size())
 	copy(buf, k.Data())
 	k.Free()
+
 	return buf
 }
 
 func (opiter *OperatorIteratorSafe) Value() []byte {
-	var buf []byte
-	k := opiter.iter.Value()
-	copy(buf, k.Data())
-	k.Free()
+	v := opiter.iter.Value()
+	var buf []byte = make([]byte, v.Size())
+	copy(buf, v.Data())
+	v.Free()
 	return buf
 }
 
