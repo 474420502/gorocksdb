@@ -344,7 +344,7 @@ func (opcf *OperatorColumnFamily) NewIterator() *OperatorIterator {
 }
 
 // NewIterator returns an Iterator over the the database and column family that uses the ReadOptions
-func (opcf *OperatorColumnFamily) IteratorSafe(do func(*OperatorIteratorSafe)) {
+func (opcf *OperatorColumnFamily) IteratorSafe(do func(iter *OperatorIteratorSafe)) {
 	opiter := &OperatorIteratorSafe{iter: opcf.db.NewIteratorCF(opcf.ropt, opcf.cfh)}
 	defer opiter.close()
 	do(opiter)
