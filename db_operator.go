@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"runtime"
 	"strconv"
+	"sync/atomic"
 )
 
 // Operator easy to operate rocksdb
@@ -19,7 +20,7 @@ type Operator struct {
 
 	cfhs map[string]*ColumnFamilyHandle
 
-	isDestory bool
+	isDestory int32
 }
 
 // OpenDbColumnFamiliesEx Auto destory with call runtime.SetFinalizer.
@@ -117,11 +118,15 @@ func (op *Operator) ColumnFamily(name string) *OperatorColumnFamily {
 func (op *Operator) ColumnFamilyMissCreate(name string) *OperatorColumnFamily {
 	var cfh *ColumnFamilyHandle
 	var ok bool
+
+	// not safe. multi goroutine is can error
 	if cfh, ok = op.cfhs[name]; !ok {
-		err := op.CreateColumnFamily(name)
+		var err error
+		cfh, err = op.db.CreateColumnFamily(op.opts, name)
 		if err != nil {
 			panic(err)
 		}
+		op.cfhs[name] = cfh
 	}
 
 	if op.wopt == nil {
@@ -144,7 +149,7 @@ func (op *Operator) ColumnFamilyMissCreate(name string) *OperatorColumnFamily {
 func (op *Operator) CreateColumnFamily(name string) error {
 	cf, err := op.db.CreateColumnFamily(op.opts, name)
 	if err != nil {
-		return nil
+		return err
 	}
 	op.cfhs[name] = cf
 	return nil
@@ -152,7 +157,7 @@ func (op *Operator) CreateColumnFamily(name string) error {
 
 // Destory  destory  the objects in operator
 func (op *Operator) Destory() {
-	if !op.isDestory {
+	if atomic.CompareAndSwapInt32(&op.isDestory, 0, 1) {
 		if op.cfhs != nil {
 			for _, cfh := range op.cfhs {
 				cfh.Destroy()
@@ -168,8 +173,6 @@ func (op *Operator) Destory() {
 		if op.db != nil {
 			op.db.Close()
 		}
-
-		op.isDestory = true
 	}
 }
 
