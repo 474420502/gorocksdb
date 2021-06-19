@@ -34,6 +34,10 @@ func OpenDbColumnFamiliesEx(opts *Options, name string) (*Operator, error) {
 			return nil, err
 		}
 		ndb.Close()
+		cfnames, err = ListColumnFamilies(opts, name)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	var cfOpts []*Options
