@@ -113,10 +113,8 @@ func (op *Operator) ColumnFamily(name string) *OperatorColumnFamily {
 		}
 
 		return &OperatorColumnFamily{
-			db:   op.db,
-			wopt: op.wopt,
-			ropt: op.ropt,
-			cfh:  cfh,
+			operator: op,
+			cfh:      cfh,
 		}
 	}
 	return nil
@@ -146,10 +144,8 @@ func (op *Operator) ColumnFamilyMissCreate(name string) *OperatorColumnFamily {
 	}
 
 	return &OperatorColumnFamily{
-		db:   op.db,
-		wopt: op.wopt,
-		ropt: op.ropt,
-		cfh:  cfh,
+		operator: op,
+		cfh:      cfh,
 	}
 }
 
@@ -186,15 +182,13 @@ func (op *Operator) Destory() {
 
 // OperatorColumnFamily easy to operate the ColumnFamily of  rocksdb
 type OperatorColumnFamily struct {
-	db   *DB
-	ropt *ReadOptions
-	wopt *WriteOptions
-	cfh  *ColumnFamilyHandle
+	operator *Operator
+	cfh      *ColumnFamilyHandle
 }
 
 // Put
 func (opcf *OperatorColumnFamily) Put(key, value []byte) error {
-	return opcf.db.PutCF(opcf.wopt, opcf.cfh, key, value)
+	return opcf.operator.db.PutCF(opcf.operator.wopt, opcf.cfh, key, value)
 }
 
 // PutObject
@@ -204,12 +198,12 @@ func (opcf *OperatorColumnFamily) PutObject(key []byte, value interface{}) error
 	if err != nil {
 		return err
 	}
-	return opcf.db.PutCF(opcf.wopt, opcf.cfh, key, buf.Bytes())
+	return opcf.operator.db.PutCF(opcf.operator.wopt, opcf.cfh, key, buf.Bytes())
 }
 
 // GetObject is safe
 func (opcf *OperatorColumnFamily) GetObject(key []byte, value interface{}) error {
-	s, err := opcf.db.GetCF(opcf.ropt, opcf.cfh, key)
+	s, err := opcf.operator.db.GetCF(opcf.operator.ropt, opcf.cfh, key)
 	if err != nil {
 		return err
 	}
@@ -233,7 +227,7 @@ func (opcf *OperatorColumnFamily) MultiGetObject(value interface{}, key ...[]byt
 		rvalue := reflect.ValueOf(value)
 		zero := reflect.Zero(rtype)
 
-		ss, err := opcf.db.MultiGetCF(opcf.ropt, opcf.cfh, key...)
+		ss, err := opcf.operator.db.MultiGetCF(opcf.operator.ropt, opcf.cfh, key...)
 		if err != nil {
 			return nil
 		}
@@ -254,7 +248,7 @@ func (opcf *OperatorColumnFamily) MultiGetObject(value interface{}, key ...[]byt
 		rvalue := reflect.ValueOf(value)
 		zero := reflect.Zero(rtype)
 
-		ss, err := opcf.db.MultiGetCF(opcf.ropt, opcf.cfh, key...)
+		ss, err := opcf.operator.db.MultiGetCF(opcf.operator.ropt, opcf.cfh, key...)
 		if err != nil {
 			return nil
 		}
@@ -277,7 +271,7 @@ func (opcf *OperatorColumnFamily) MultiGetObject(value interface{}, key ...[]byt
 
 // Delete
 func (opcf *OperatorColumnFamily) Delete(key []byte) error {
-	return opcf.db.DeleteCF(opcf.wopt, opcf.cfh, key)
+	return opcf.operator.db.DeleteCF(opcf.operator.wopt, opcf.cfh, key)
 }
 
 // Get Slice is need free
@@ -291,17 +285,17 @@ func (opcf *OperatorColumnFamily) KeySize() uint64 {
 
 // Get Slice is need free
 func (opcf *OperatorColumnFamily) Get(key []byte) (*Slice, error) {
-	return opcf.db.GetCF(opcf.ropt, opcf.cfh, key)
+	return opcf.operator.db.GetCF(opcf.operator.ropt, opcf.cfh, key)
 }
 
 // MultiGet Slices is need Destory
 func (opcf *OperatorColumnFamily) MultiGet(key ...[]byte) (Slices, error) {
-	return opcf.db.MultiGetCF(opcf.ropt, opcf.cfh, key...)
+	return opcf.operator.db.MultiGetCF(opcf.operator.ropt, opcf.cfh, key...)
 }
 
 // GetSafe not need to free object
 func (opcf *OperatorColumnFamily) GetSafe(key []byte, do func(value []byte)) error {
-	s, err := opcf.db.GetCF(opcf.ropt, opcf.cfh, key)
+	s, err := opcf.operator.db.GetCF(opcf.operator.ropt, opcf.cfh, key)
 	if err != nil {
 		return err
 	}
@@ -312,7 +306,7 @@ func (opcf *OperatorColumnFamily) GetSafe(key []byte, do func(value []byte)) err
 
 // Get Slices is not needed to free object
 func (opcf *OperatorColumnFamily) MultiGetSafe(do func(i int, value []byte) bool, key ...[]byte) error {
-	ss, err := opcf.db.MultiGetCF(opcf.ropt, opcf.cfh, key...)
+	ss, err := opcf.operator.db.MultiGetCF(opcf.operator.ropt, opcf.cfh, key...)
 	if err != nil {
 		return err
 	}
@@ -326,11 +320,11 @@ func (opcf *OperatorColumnFamily) MultiGetSafe(do func(i int, value []byte) bool
 }
 
 // WriteBatch  批量Put(安全释放内存)
-func (op *OperatorColumnFamily) WriteBatch(do func(batch *WriteBatchColumnFamily)) error {
-	batch := newWriteBatchColumnFamily(op)
+func (opcf *OperatorColumnFamily) WriteBatch(do func(batch *WriteBatchColumnFamily)) error {
+	batch := newWriteBatchColumnFamily(opcf)
 	defer batch.wb.Destroy()
 	do(batch)
-	err := op.db.Write(op.wopt, batch.wb)
+	err := opcf.operator.db.Write(opcf.operator.wopt, batch.wb)
 	if err != nil {
 		return err
 	}
@@ -340,19 +334,19 @@ func (op *OperatorColumnFamily) WriteBatch(do func(batch *WriteBatchColumnFamily
 // NewIterator returns an Iterator over the the database and column family that uses the ReadOptions.
 // Warning! iterator must be closed.
 func (opcf *OperatorColumnFamily) NewIterator() *OperatorIterator {
-	return &OperatorIterator{iter: opcf.db.NewIteratorCF(opcf.ropt, opcf.cfh)}
+	return &OperatorIterator{iter: opcf.operator.db.NewIteratorCF(opcf.operator.ropt, opcf.cfh)}
 }
 
 // NewIterator returns an Iterator over the the database and column family that uses the ReadOptions
 func (opcf *OperatorColumnFamily) IteratorSafe(do func(iter *OperatorIteratorSafe)) {
-	opiter := &OperatorIteratorSafe{iter: opcf.db.NewIteratorCF(opcf.ropt, opcf.cfh)}
+	opiter := &OperatorIteratorSafe{iter: opcf.operator.db.NewIteratorCF(opcf.operator.ropt, opcf.cfh)}
 	defer opiter.close()
 	do(opiter)
 }
 
 // GetProperty returns the value of a database property.
-func (op *OperatorColumnFamily) GetProperty(propName string) string {
-	return op.db.GetPropertyCF(propName, op.cfh)
+func (opcf *OperatorColumnFamily) GetProperty(propName string) string {
+	return opcf.operator.db.GetPropertyCF(propName, opcf.cfh)
 }
 
 type WriteBatchColumnFamily struct {
@@ -360,10 +354,10 @@ type WriteBatchColumnFamily struct {
 	op *OperatorColumnFamily
 }
 
-func newWriteBatchColumnFamily(op *OperatorColumnFamily) *WriteBatchColumnFamily {
+func newWriteBatchColumnFamily(opcf *OperatorColumnFamily) *WriteBatchColumnFamily {
 	return &WriteBatchColumnFamily{
 		wb: NewWriteBatch(),
-		op: op,
+		op: opcf,
 	}
 }
 
