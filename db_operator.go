@@ -50,6 +50,8 @@ func OpenDbColumnFamiliesEx(opts *Options, name string, alloptions func(name str
 
 	op := &Operator{
 		opts: opts,
+		wopt: NewDefaultWriteOptions(),
+		ropt: NewDefaultReadOptions(),
 		cfhs: make(map[string]*ColumnFamilyInfo),
 	}
 
@@ -81,6 +83,7 @@ func OpenDbColumnFamiliesEx(opts *Options, name string, alloptions func(name str
 	if err != nil {
 		return nil, err
 	}
+
 	op.db = db
 	for i, name := range cfnames {
 		info := op.cfhs[name]
