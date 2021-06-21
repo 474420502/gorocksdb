@@ -54,9 +54,16 @@ func OpenDbColumnFamiliesEx(opts *Options, name string, alloptions func(name str
 	}
 
 	for _, name := range cfnames {
+		var cfopts *Options
+		if alloptions != nil {
+			cfopts = alloptions(name)
+		} else {
+			cfopts = opts
+		}
+
 		op.cfhs[name] = &ColumnFamilyInfo{
 			Name: name,
-			opts: alloptions(name),
+			opts: cfopts,
 		}
 	}
 
