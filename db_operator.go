@@ -165,6 +165,9 @@ func (op *Operator) ColumnFamilyMissCreate(opts *Options, name string) *Operator
 			wopt: op.wopt,
 			cfh:  cfh,
 		}
+		if cfi.opts == nil {
+			cfi.opts = op.opts
+		}
 		op.cfhs[name] = cfi
 	}
 
@@ -194,6 +197,9 @@ func (op *Operator) CreateColumnFamily(opts *Options, name string) error {
 		ropt: op.ropt,
 		wopt: op.wopt,
 		cfh:  cfh,
+	}
+	if cfi.opts == nil {
+		cfi.opts = op.opts
 	}
 	op.cfhs[name] = cfi
 	return nil
@@ -240,10 +246,16 @@ type OperatorColumnFamily struct {
 
 // Put
 func (opcf *OperatorColumnFamily) SetReadOptions(ropt *ReadOptions) {
+	if ropt == nil {
+		ropt = opcf.operator.ropt
+	}
 	opcf.cfi.ropt = ropt
 }
 
 func (opcf *OperatorColumnFamily) SetWriteOptions(wopt *WriteOptions) {
+	if wopt == nil {
+		wopt = opcf.operator.wopt
+	}
 	opcf.cfi.wopt = wopt
 }
 
