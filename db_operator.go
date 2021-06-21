@@ -159,6 +159,10 @@ func (op *Operator) ColumnFamilyMissCreate(opts *Options, name string) *Operator
 	var cfi *ColumnFamilyInfo
 	var ok bool
 
+	if opts == nil {
+		opts = op.opts
+	}
+
 	// not safe. multi goroutine is can error
 	if cfi, ok = op.cfhs[name]; !ok {
 		var err error
@@ -199,6 +203,11 @@ func (op *Operator) CreateColumnFamily(opts *Options, name string) error {
 	if err != nil {
 		return err
 	}
+
+	if opts == nil {
+		opts = op.opts
+	}
+
 	cfi := &ColumnFamilyInfo{
 		opts: opts,
 		ropt: op.ropt,
