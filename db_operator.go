@@ -163,6 +163,14 @@ func (op *Operator) ColumnFamilyMissCreate(opts *Options, name string) *Operator
 		opts = op.opts
 	}
 
+	if op.wopt == nil {
+		op.wopt = NewDefaultWriteOptions()
+	}
+
+	if op.ropt == nil {
+		op.ropt = NewDefaultReadOptions()
+	}
+
 	// not safe. multi goroutine is can error
 	if cfi, ok = op.cfhs[name]; !ok {
 		var err error
@@ -180,14 +188,6 @@ func (op *Operator) ColumnFamilyMissCreate(opts *Options, name string) *Operator
 			cfi.opts = op.opts
 		}
 		op.cfhs[name] = cfi
-	}
-
-	if op.wopt == nil {
-		op.wopt = NewDefaultWriteOptions()
-	}
-
-	if op.ropt == nil {
-		op.ropt = NewDefaultReadOptions()
 	}
 
 	return &OperatorColumnFamily{
@@ -364,7 +364,7 @@ func (opcf *OperatorColumnFamily) Delete(key []byte) error {
 }
 
 // Get Slice is need free
-func (opcf *OperatorColumnFamily) KeySize() uint64 {
+func (opcf *OperatorColumnFamily) EstimateKeySize() uint64 {
 	size, err := strconv.ParseUint(opcf.GetProperty("rocksdb.estimate-num-keys"), 10, 64)
 	if err != nil {
 		panic(err)
