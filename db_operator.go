@@ -3,8 +3,6 @@ package rocks
 import (
 	"bytes"
 	"encoding/gob"
-	"fmt"
-	"reflect"
 	"runtime"
 	"strconv"
 	"sync/atomic"
@@ -307,55 +305,15 @@ func (opcf *OperatorColumnFamily) GetObject(key []byte, value interface{}) error
 }
 
 // MultiGetObject is safe
-func (opcf *OperatorColumnFamily) MultiGetObject(value interface{}, key ...[]byte) error {
-	rtype := reflect.TypeOf(value)
-	if rtype.Kind() != reflect.Slice {
-		return fmt.Errorf("value must be the type of slice")
+func (opcf *OperatorColumnFamily) MultiGetObjectSafe(do func(i int, valueDecode *gob.Decoder) bool, key ...[]byte) error {
+	ss, err := opcf.operator.db.MultiGetCF(opcf.cfi.ropt, opcf.cfi.cfh, key...)
+	if err != nil {
+		return err
 	}
-	rtype = rtype.Elem()
-	if rtype.Kind() == reflect.Ptr {
-		rtype = rtype.Elem()
-
-		rvalue := reflect.ValueOf(value)
-		zero := reflect.Zero(rtype)
-
-		ss, err := opcf.operator.db.MultiGetCF(opcf.cfi.ropt, opcf.cfi.cfh, key...)
-		if err != nil {
-			return nil
-		}
-		defer ss.Destroy()
-		for _, s := range ss {
-			if s.Exists() {
-				item := reflect.New(rtype)
-				err = gob.NewDecoder(bytes.NewReader(s.Data())).DecodeValue(item)
-				if err != nil {
-					return err
-				}
-				rvalue = reflect.Append(rvalue, item.Addr())
-			} else {
-				rvalue = reflect.Append(rvalue, zero)
-			}
-		}
-	} else {
-		rvalue := reflect.ValueOf(value)
-		zero := reflect.Zero(rtype)
-
-		ss, err := opcf.operator.db.MultiGetCF(opcf.cfi.ropt, opcf.cfi.cfh, key...)
-		if err != nil {
-			return nil
-		}
-		defer ss.Destroy()
-		for _, s := range ss {
-			if s.Exists() {
-				item := reflect.New(rtype)
-				err = gob.NewDecoder(bytes.NewReader(s.Data())).DecodeValue(item)
-				if err != nil {
-					return err
-				}
-				rvalue = reflect.Append(rvalue, item)
-			} else {
-				rvalue = reflect.Append(rvalue, zero)
-			}
+	defer ss.Destroy()
+	for i, s := range ss {
+		if !do(i, gob.NewDecoder(bytes.NewBuffer(s.Data()))) {
+			break
 		}
 	}
 	return nil
